@@ -20,51 +20,44 @@ type Fruit = {
 }
 
 
-[<CLIMutable>]
 type NewFruitData = {
   Name : string
 }
 
 module DbConfig = 
+  // TODO: extract connections to the environment variables
   let connectionString = "postgres://root:root@localhost:5432/fs_node_boilerplate_local"
-
 
 module Fruits = 
 
   let dbConnection = 
     DbConfig.connectionString |> Sql.connect
+  
+  let mapRowToFruit (read: RowReader) = {
+    Id = read.int "id"
+    Name = read.text "name"
+  }
 
   let getById (id: int) =
     let fruits =
       dbConnection
         |> Sql.query "SELECT * FROM fruits where id = @id"
         |> Sql.parameters [("id", Sql.int id )]
-        |> Sql.execute (fun read ->
-          {
-            Id = read.int "id"
-            Name = read.text "name"
-          })
+        |> Sql.execute mapRowToFruit
 
     List.head fruits
 
   let getAll () =
     dbConnection
     |> Sql.query "SELECT * FROM fruits ORDER BY id DESC"
-    |> Sql.execute (fun read ->
-      {
-        Id = read.int "id"
-        Name = read.text "name"
-      }) 
+    |> Sql.execute mapRowToFruit
 
   let create (name: string) = 
     let newFruitId = 
       dbConnection
         |> Sql.query "INSERT INTO fruits(name) VALUES(@name) RETURNING id;" 
         |> Sql.parameters [("name", Sql.string name )]
-        |> Sql.execute (fun read ->
-          {
-            Id = read.int "id"
-          })
+        |> Sql.execute (fun read -> { Id = read.int "id" })
 
     getById (List.head newFruitId).Id
 
@@ -72,14 +65,10 @@ module Fruits =
     dbConnection
       |> Sql.query "UPDATE public.fruits SET name=@name WHERE id=@id;" 
       |> Sql.parameters [("name", Sql.string fruit.Name); ("id", Sql.int fruit.Id)]
-      |> Sql.execute (fun read ->
-        {
-          Id = read.int "id"
-          Name = read.string "name"
-        }) |> ignore
+      |> Sql.execute mapRowToFruit
+      |> ignore
 
     getById fruit.Id
-
 
 
 [<ApiController>]
