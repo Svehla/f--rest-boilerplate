@@ -13,6 +13,8 @@
 
   <ItemGroup>
     <PackageReference Include="FSharp.Data.TypeProviders" Version="6.0.1" />
+    <PackageReference Include="Npgsql.FSharp" Version="4.1.0" />
+    <PackageReference Include="SQLProvider" Version="1.2.10" />
   </ItemGroup>
 
 </Project>

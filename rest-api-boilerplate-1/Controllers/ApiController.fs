@@ -1,7 +1,6 @@
 ﻿namespace rest_api_boilerplate_1
 namespace rest_api_boilerplate_1.Controllers
 
-
 open System
 open System.Collections.Generic
 open System.Linq
@@ -9,28 +8,106 @@ open System.Threading.Tasks
 open Microsoft.AspNetCore.Mvc
 open Microsoft.Extensions.Logging
 
+open Npgsql.FSharp
 
-type User = {
-  Name: string 
-  Age: int
+type FruitId = {
+  Id: int
 }
+
+type Fruit = {
+  Id: int
+  Name: string
+}
+
+
+[<CLIMutable>]
+type NewFruitData = {
+  Name : string
+}
+
+module DbConfig = 
+  let connectionString = "postgres://root:root@localhost:5432/fs_node_boilerplate_local"
+
+
+module Fruits = 
+
+  let dbConnection = 
+    DbConfig.connectionString |> Sql.connect
+
+  let getById (id: int) =
+    let fruits =
+      dbConnection
+        |> Sql.query "SELECT * FROM fruits where id = @id"
+        |> Sql.parameters [("id", Sql.int id )]
+        |> Sql.execute (fun read ->
+          {
+            Id = read.int "id"
+            Name = read.text "name"
+          })
+
+    List.head fruits
+
+  let getAll () =
+    dbConnection
+    |> Sql.query "SELECT * FROM fruits ORDER BY id DESC"
+    |> Sql.execute (fun read ->
+      {
+        Id = read.int "id"
+        Name = read.text "name"
+      }) 
+
+  let create (name: string) = 
+    let newFruitId = 
+      dbConnection
+        |> Sql.query "INSERT INTO fruits(name) VALUES(@name) RETURNING id;" 
+        |> Sql.parameters [("name", Sql.string name )]
+        |> Sql.execute (fun read ->
+          {
+            Id = read.int "id"
+          })
+
+    getById (List.head newFruitId).Id
+
+  let update (fruit: Fruit) = 
+    dbConnection
+      |> Sql.query "UPDATE public.fruits SET name=@name WHERE id=@id;" 
+      |> Sql.parameters [("name", Sql.string fruit.Name); ("id", Sql.int fruit.Id)]
+      |> Sql.execute (fun read ->
+        {
+          Id = read.int "id"
+          Name = read.string "name"
+        }) |> ignore
+
+    getById fruit.Id
+
+
 
 [<ApiController>]
 [<Route("[controller]")>]
 type ApiController (logger : ILogger<ApiController>) =
+
     inherit ControllerBase()
 
-    [<Route("id/{name}")>]
+    [<Route("fruits")>]
+    [<HttpPost>]
+    member _.CreateFruit(data: NewFruitData) =
+      let newfruit = Fruits.create(data.Name)
+      ActionResult<Fruit>(newfruit)
+
+    [<Route("fruits")>]
+    [<HttpPut>]
+    member _.UpdateFruit fruit =
+      let updatedFruit = Fruits.update(fruit)
+      ActionResult<Fruit>(updatedFruit)
+
+    [<Route("fruits")>]
     [<HttpGet>]
-    member _.Get(name: string) =
-      logger.LogInformation $"{name}"
+    member _.Fruits() =
+      ActionResult<Fruit list>(Fruits.getAll())
 
-      // let myUser = None
+    [<Route("fruits/{id}")>]
+    [<HttpGet>]
+    member _.Get(id: string) =
 
-      let myUser = {
-        Name = name
-        Age = 40
-      }
-
-      ActionResult<User>(myUser)
+      ActionResult<Fruit>(Fruits.getById (int id))
 
